@@ -33,7 +33,11 @@ jobs:
       - name: Pruebas
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest -q
+        # Qt puede cerrar el proceso con error al terminar Python aunque todas las pruebas pasen;
+        # por eso el resultado se lee del informe JUnit y no del código de salida.
+        run: |
+          python -m pytest -q --junitxml=resultado-pruebas.xml || true
+          python -c "import sys, xml.etree.ElementTree as ET; r = ET.parse('resultado-pruebas.xml').getroot(); s = r if r.tag == 'testsuite' else r[0]; f = int(s.get('failures')) + int(s.get('errors')); print('pruebas:', s.get('tests'), 'fallas:', f); sys.exit(1 if f or int(s.get('tests')) == 0 else 0)"
       - name: Construir el .deb
         run: python empaquetar/construir_deb.py
       - uses: actions/upload-artifact@v4
