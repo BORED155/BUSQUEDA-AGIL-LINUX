@@ -46,6 +46,8 @@ QScrollBar::add-page, QScrollBar::sub-page { background: none; }
 QPushButton#principal { background: #2e7d32; color: white; border-radius: 6px; padding: 6px 14px; }
 """
 
+VERIFICAR = 100     # filas que se comprueban en disco en cada búsqueda: las visibles, no las 2000
+
 AYUDA = ("Escriba parte del nombre. Ejemplos:\n"
          "  factura enero      → que tenga las dos palabras\n"
          '  "estado de cuenta" → la frase exacta\n'
@@ -96,7 +98,7 @@ class VentanaBuscador(QMainWindow):
         self.busqueda.setToolTip(AYUDA)
         self.busqueda.textChanged.connect(lambda _t: self._temporizador.start())
         self.busqueda.returnPressed.connect(self.abrir_primero)
-        self._temporizador = QTimer(self, singleShot=True, interval=90)
+        self._temporizador = QTimer(self, singleShot=True, interval=40)
         self._temporizador.timeout.connect(self.buscar)
 
         self.b_actualizar = QToolButton()
@@ -146,9 +148,11 @@ class VentanaBuscador(QMainWindow):
         cab = self.tabla.horizontalHeader()
         cab.setSectionResizeMode(0, QHeaderView.Interactive)
         cab.setSectionResizeMode(1, QHeaderView.Stretch)
-        cab.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        cab.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        # ancho fijo: con ResizeToContents Qt mide cientos de filas en cada búsqueda (cerca de 1 s al abrir)
+        medida = self.tabla.fontMetrics().horizontalAdvance
         cab.resizeSection(0, 380)
+        cab.resizeSection(2, medida("999.9 MB") + 28)
+        cab.resizeSection(3, medida("00/00/0000 00:00") + 28)
         self.tabla.setDragEnabled(True)
         self.tabla.setDragDropMode(QAbstractItemView.DragOnly)
         self.tabla.doubleClicked.connect(lambda i: self.abrir([i.row()]))
@@ -203,7 +207,7 @@ class VentanaBuscador(QMainWindow):
         inicio = time.perf_counter()
         filas, total = self.buscador.buscar(self.busqueda.text(), self.categoria, self.orden, self.descendente)
         # lo que se borró por fuera (Archivos, terminal…) no se muestra y se saca del índice al momento
-        faltan = [r for r in filas if not os.path.lexists(r.ruta)]
+        faltan = [r for r in filas[:VERIFICAR] if not os.path.lexists(r.ruta)]
         if faltan:
             self.buscador.quitar([r.ruta for r in faltan])
             idos = {id(r) for r in faltan}

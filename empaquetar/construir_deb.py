@@ -26,6 +26,13 @@ SIN_USAR = ["tkinter", "pytest", "PySide6.QtWebEngineCore", "PySide6.QtWebEngine
             "PySide6.QtSerialPort", "PySide6.QtDesigner", "PySide6.QtSql", "PySide6.QtTest", "PySide6.QtOpenGL",
             "PySide6.QtSvgWidgets", "PySide6.QtPrintSupport", "PySide6.QtQuickWidgets", "PySide6.QtGraphs"]
 
+# PyInstaller las copia por los plugins, pero el programa no las carga (Qt/…, relativo a PySide6/Qt)
+QT_SOBRANTE = ["lib/libQt6Quick.so*", "lib/libQt6Qml*.so*", "lib/libQt6VirtualKeyboard*.so*", "lib/libQt6Pdf.so*",
+               "lib/libQt6EglFS*.so*", "lib/libQt6EglFs*.so*", "egldeviceintegrations", "plugins/egldeviceintegrations",
+               "plugins/platforminputcontexts/libqtvirtualkeyboardplugin.so", "plugins/imageformats/libqpdf.so",
+               "plugins/platforms/libqeglfs.so", "plugins/platforms/libqvnc.so", "plugins/platforms/libqlinuxfb.so",
+               "plugins/platforms/libqminimalegl.so", "plugins/networkinformation", "plugins/tls"]
+
 ESCRITORIO = """[Desktop Entry]
 Type=Application
 Version=1.0
@@ -62,6 +69,13 @@ def main() -> int:
         args += ["--exclude-module", m]
     args.append(str(RAIZ / "empaquetar" / "lanzador.py"))
     subprocess.run(args, check=True)
+    qt = dist / NOMBRE / "_internal" / "PySide6" / "Qt"
+    for patron in QT_SOBRANTE:
+        for p in qt.glob(patron):
+            shutil.rmtree(p) if p.is_dir() else p.unlink()
+    for p in (qt / "translations").glob("*"):
+        if p.name != "qtbase_es.qm":          # el único que carga aplicacion.py
+            p.unlink()
 
     paquete = build / "deb"
     shutil.rmtree(paquete, ignore_errors=True)

@@ -70,3 +70,36 @@ def test_quitar_del_indice(arbol, tmp_path):
     assert b.quitar([str(arbol / "Documentos")]) == 6   # Documentos, Facturas, 2 facturas, estado, contraseña
     assert nombres(b, "factura") == [] and nombres(b, "estado") == []
     assert b.info()[0] == n - 7
+
+
+def _indice_con(tmp_path, nombres):
+    base = tmp_path / "datos"
+    base.mkdir()
+    for n in nombres:
+        (base / n).write_text("x")
+    destino = tmp_path / "i.db"
+    indexar(Config(carpetas=[str(base)], excluir=[]), destino)
+    return Buscador(destino)
+
+
+def _nombres(b, texto):
+    return sorted(r.nombre for r in b.buscar(texto)[0])
+
+
+def test_busqueda_usa_trigramas_y_respeta_guion_bajo_literal(tmp_path):
+    b = _indice_con(tmp_path, ["mi_archivo.txt", "mixarchivo.txt", "a_b.txt", "axb.txt", "100%listo.txt", "100xlisto.txt",
+                               "foto12.jpg", "foto123.jpg"])
+    assert _nombres(b, "mi_archivo") == ["mi_archivo.txt"]
+    assert _nombres(b, "a_b") == ["a_b.txt"]
+    assert _nombres(b, "100%listo") == ["100%listo.txt"]
+    assert _nombres(b, "foto??.jpg") == ["foto12.jpg"]
+    assert _nombres(b, "archivo mi_") == ["mi_archivo.txt"]
+    assert _nombres(b, "ax") == ["axb.txt"]
+    plan = " ".join(r[3] for r in b._conexion().execute(
+        "EXPLAIN QUERY PLAN SELECT rowid FROM nombres n WHERE n.clave LIKE ?", ("%archivo%",)))
+    assert "VIRTUAL TABLE INDEX 0:L" in plan
+
+
+def test_normalizar_ascii_y_con_tildes():
+    assert normalizar("Factura.PDF") == "factura.pdf"
+    assert normalizar("Canción Ñandú") == "cancion nandu"

@@ -33,6 +33,8 @@ ORDENES = {"nombre": "a.clave", "carpeta": "c.ruta", "tamano": "a.tamano", "fech
 
 def normalizar(texto: str) -> str:
     """minúsculas y sin tildes: «Factura Nº Ñandú.PDF» → «factura no nandu.pdf» (para buscar sin importar eso)."""
+    if texto.isascii():      # casi todos los nombres: mucho más rápido que descomponer letra por letra
+        return texto.lower()
     t = unicodedata.normalize("NFKD", texto)
     return "".join(c for c in t if not unicodedata.combining(c)).lower()
 
@@ -147,7 +149,7 @@ def indexar(config: Config, destino: Path | None = None, progreso: Progreso | No
                 nombre = e.name
                 if not config.ocultos and nombre.startswith("."):
                     continue
-                if excluir and os.path.normpath(e.path) in excluir:
+                if e.path in excluir:
                     continue
                 try:
                     es_dir = e.is_dir(follow_symlinks=False)
@@ -173,6 +175,7 @@ def indexar(config: Config, destino: Path | None = None, progreso: Progreso | No
                                                     tokenize='trigram');
             INSERT INTO nombres(rowid, clave) SELECT id, clave FROM archivos;
             CREATE INDEX i_ext ON archivos(ext);
+            CREATE INDEX i_clave ON archivos(clave);
         """)
         con.execute("INSERT INTO info VALUES ('fecha', ?), ('total', ?)", (str(int(time.time())), str(total)))
         con.commit()
@@ -267,13 +270,25 @@ class Buscador:
             return [], 0
         condiciones, extensiones = interpretar(texto)
         donde, params = [], []
-        usa_fts = any(t == "nombre" for t, _ in condiciones)
+        usa_fts = False
         for tipo, patron in condiciones:
             if tipo == "ruta":
                 donde.append("(lower(c.ruta) || '/' || a.clave) LIKE ? ESCAPE '\\'")
+                params.append(patron)
+                continue
+            # los trigramas exigen 3 letras seguidas y un LIKE sin ESCAPE; «_» y «%» escritos por el usuario
+            # pasan a comodines (trae de más) y la segunda condición deja solo los exactos
+            ancho = re.sub(r"\\(.)", r"\1", patron)
+            if re.search(r"[^%_]{3}", ancho):
+                usa_fts = True
+                donde.append("n.clave LIKE ?")
+                params.append(ancho)
+                if ancho != patron:
+                    donde.append("n.clave LIKE ? ESCAPE '\\'")
+                    params.append(patron)
             else:
-                donde.append("n.clave LIKE ? ESCAPE '\\'")
-            params.append(patron)
+                donde.append("a.clave LIKE ? ESCAPE '\\'")
+                params.append(patron)
         if categoria == "carpetas":
             donde.append("a.es_dir = 1")
         elif categoria in CATEGORIAS and CATEGORIAS[categoria][1]:
@@ -286,6 +301,8 @@ class Buscador:
             " JOIN carpetas c ON c.id = a.carpeta"
         filtro = (" WHERE " + " AND ".join(donde)) if donde else ""
         columna = ORDENES.get(orden, "a.clave")
+        if any(t == "ruta" for t, _ in condiciones):
+            columna = "+" + columna       # sin usar i_clave: recorrerlo mirando la carpeta de cada fila es 3 veces más lento
         sentido = "DESC" if descendente else "ASC"
         filas = con.execute(f"SELECT a.nombre, c.ruta, a.tamano, a.mtime, a.es_dir FROM {origen}{filtro} "
                             f"ORDER BY {columna} {sentido}, a.clave LIMIT ?", params + [limite]).fetchall()
