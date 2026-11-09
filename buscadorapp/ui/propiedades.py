@@ -10,11 +10,11 @@ import stat
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import QMimeDatabase, QObject, Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QGuiApplication, QIcon, QImageReader
+from PySide6.QtCore import QMimeDatabase, QObject, Qt, Signal
+from PySide6.QtGui import QGuiApplication, QIcon, QImageReader
 from PySide6.QtWidgets import (QDialog, QFormLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout)
 
-from .. import sistema
+from .. import aplicaciones, sistema
 from .modelo import tamano_legible
 
 
@@ -144,7 +144,7 @@ class DialogoPropiedades(QDialog):
                                        if ok) or "solo verlo en la lista")
 
         botones = QHBoxLayout()
-        for texto, funcion in (("Abrir", lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(ruta))),
+        for texto, funcion in (("Abrir", lambda: aplicaciones.abrir_predeterminada(ruta)),
                                ("📂 Abrir carpeta contenedora", self._carpeta),
                                ("Copiar ruta", lambda: QGuiApplication.clipboard().setText(ruta))):
             b = QPushButton(texto)
@@ -164,7 +164,7 @@ class DialogoPropiedades(QDialog):
 
     def _carpeta(self) -> None:
         if not sistema.mostrar_en_carpeta(Path(self.ruta)):
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(self.ruta).parent)))
+            aplicaciones.abrir_predeterminada(str(Path(self.ruta).parent))
 
     def _contenido(self, total: int, archivos: int, carpetas: int, terminado: bool) -> None:
         texto = (f"{tamano_legible(total)}  ·  {archivos:,} archivo(s) y {carpetas:,} carpeta(s)"

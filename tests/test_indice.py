@@ -103,3 +103,15 @@ def test_busqueda_usa_trigramas_y_respeta_guion_bajo_literal(tmp_path):
 def test_normalizar_ascii_y_con_tildes():
     assert normalizar("Factura.PDF") == "factura.pdf"
     assert normalizar("Canción Ñandú") == "cancion nandu"
+
+
+def test_entorno_sistema_quita_las_librerias_del_paquete(monkeypatch):
+    from buscadorapp import sistema
+
+    monkeypatch.setattr(sistema.sys, "frozen", True, raising=False)
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/opt/buscador-agil/_internal")
+    monkeypatch.delenv("LD_LIBRARY_PATH_ORIG", raising=False)
+    assert "LD_LIBRARY_PATH" not in sistema.entorno_sistema()
+    monkeypatch.setenv("LD_LIBRARY_PATH_ORIG", "/mis/libs")
+    env = sistema.entorno_sistema()
+    assert env["LD_LIBRARY_PATH"] == "/mis/libs" and "LD_LIBRARY_PATH_ORIG" not in env

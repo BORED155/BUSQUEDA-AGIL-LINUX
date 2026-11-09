@@ -10,6 +10,8 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .sistema import entorno_sistema
+
 
 @dataclass
 class Aplicacion:
@@ -108,14 +110,16 @@ def predeterminada(tipo: str) -> str:
     if not shutil.which("xdg-mime"):
         return ""
     try:
-        r = subprocess.run(["xdg-mime", "query", "default", tipo], capture_output=True, text=True, timeout=10)
+        r = subprocess.run(["xdg-mime", "query", "default", tipo], capture_output=True, text=True, timeout=10,
+                           env=entorno_sistema())
         return r.stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return ""
 
 
 def poner_predeterminada(app: Aplicacion, tipo: str) -> None:
-    r = subprocess.run(["xdg-mime", "default", app.id, tipo], capture_output=True, text=True, timeout=10)
+    r = subprocess.run(["xdg-mime", "default", app.id, tipo], capture_output=True, text=True, timeout=10,
+                       env=entorno_sistema())
     if r.returncode != 0:
         raise RuntimeError((r.stderr or "No se pudo cambiar la aplicación predeterminada").strip())
 
@@ -123,13 +127,14 @@ def poner_predeterminada(app: Aplicacion, tipo: str) -> None:
 def abrir_con(app: Aplicacion, rutas: list[str]) -> None:
     """Abre los archivos con esa aplicación (gio entiende los %f %u… del .desktop)."""
     subprocess.Popen(["gio", "launch", str(app.ruta), *rutas], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                     start_new_session=True)
+                     start_new_session=True, env=entorno_sistema())
 
 
 def abrir_predeterminada(ruta: str) -> bool:
     """Abre con la aplicación predeterminada del sistema (la misma que usa Archivos al hacer doble clic)."""
     for cmd in (["gio", "open", ruta], ["xdg-open", ruta]):
         if shutil.which(cmd[0]):
-            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+                             env=entorno_sistema())
             return True
     return False

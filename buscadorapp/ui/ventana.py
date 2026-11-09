@@ -330,7 +330,7 @@ class VentanaBuscador(QMainWindow):
             return
         r = self.modelo.filas[filas[0]]
         if not sistema.mostrar_en_carpeta(Path(r.ruta)):
-            QDesktopServices.openUrl(QUrl.fromLocalFile(r.carpeta))
+            aplicaciones.abrir_predeterminada(r.carpeta)
 
     def copiar_ruta(self) -> None:
         rutas = [self.modelo.filas[f].ruta for f in self.filas_elegidas()]

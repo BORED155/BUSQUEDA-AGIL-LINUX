@@ -3,13 +3,28 @@
 from __future__ import annotations
 
 import ast
+import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 RUTA_ATAJO = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/buscador-agil/"
 ESQUEMA_ATAJOS = "org.gnome.settings-daemon.plugins.media-keys"
 ESQUEMA_ATAJO = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding"
+
+
+def entorno_sistema() -> dict[str, str]:
+    """Entorno para lanzar programas del sistema. En el .deb, LD_LIBRARY_PATH apunta a las librerías del paquete y
+    con ellas gsettings no carga dconf (guarda en otro lado, sin avisar) y gio falla al arrancar."""
+    env = dict(os.environ)
+    if getattr(sys, "frozen", False):
+        original = env.pop("LD_LIBRARY_PATH_ORIG", None)
+        if original is None:
+            env.pop("LD_LIBRARY_PATH", None)
+        else:
+            env["LD_LIBRARY_PATH"] = original
+    return env
 
 
 def mostrar_en_carpeta(ruta: Path) -> bool:
@@ -19,7 +34,7 @@ def mostrar_en_carpeta(ruta: Path) -> bool:
             r = subprocess.run(["gdbus", "call", "--session", "--dest", "org.freedesktop.FileManager1",
                                 "--object-path", "/org/freedesktop/FileManager1",
                                 "--method", "org.freedesktop.FileManager1.ShowItems", f"['{Path(ruta).as_uri()}']",
-                                ""], capture_output=True, timeout=10)
+                                ""], capture_output=True, timeout=10, env=entorno_sistema())
             return r.returncode == 0
         except (OSError, subprocess.SubprocessError):
             return False
@@ -27,14 +42,14 @@ def mostrar_en_carpeta(ruta: Path) -> bool:
 
 
 def a_la_papelera(ruta: Path) -> None:
-    r = subprocess.run(["gio", "trash", str(ruta)], capture_output=True, text=True, timeout=60)
+    r = subprocess.run(["gio", "trash", str(ruta)], capture_output=True, text=True, timeout=60, env=entorno_sistema())
     if r.returncode != 0:
         raise OSError((r.stderr or "No se pudo mover a la papelera").strip())
 
 
 # --- atajo de teclado global (GNOME, Zorin, Ubuntu, Budgie…) ---------------------------------
 def _gs(*args: str) -> str:
-    r = subprocess.run(["gsettings", *args], capture_output=True, text=True, timeout=10)
+    r = subprocess.run(["gsettings", *args], capture_output=True, text=True, timeout=10, env=entorno_sistema())
     if r.returncode != 0:
         raise RuntimeError((r.stderr or "gsettings falló").strip())
     return r.stdout.strip()
